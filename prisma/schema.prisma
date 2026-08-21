@@ -1,0 +1,134 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  name               String
+  email              String          @unique
+  passwordHash       String
+  role               String          @default("STUDENT") // STUDENT | STUDENT_LEADER | TEACHER | ADMIN | SUPER_ADMIN
+  nis                String?         @unique
+  nip                String?         @unique
+  class              String?
+  major              String?
+  avatarUrl          String?
+  mustChangePassword Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  announcements  Announcement[]
+  reports        IncidentReport[]
+  lostFoundItems LostFoundItem[]
+  activityLogs   ActivityLog[]
+  notifications  Notification[]
+}
+
+model Announcement {
+  id             String    @id @default(cuid())
+  title          String
+  content        String
+  category       String    @default("Umum")
+  priority       String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  imageUrl       String?
+  linkUrl        String?
+  targetAudience String    @default("ALL") // "ALL", "STUDENT", "TEACHER", "CLASS_XII"
+  publishedAt    DateTime  @default(now())
+  expiresAt      DateTime?
+  authorId       String
+  author         User      @relation(fields: [authorId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Schedule {
+  id        String   @id @default(cuid())
+  subject   String
+  teacher   String
+  className String
+  room      String
+  day       String
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  location    String
+  date        DateTime
+  startTime   String
+  endTime     String
+  organizer   String
+  imageUrl    String?
+  linkUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model IncidentReport {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  category    String
+  location    String
+  photoUrl    String?
+  status      String   @default("SUBMITTED") // SUBMITTED | REVIEWING | VERIFIED | IN_PROGRESS | RESOLVED
+  reporterId  String
+  reporter    User     @relation(fields: [reporterId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LostFoundItem {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  category    String
+  type        String   // LOST | FOUND
+  location    String
+  date        DateTime
+  imageUrl    String?
+  isResolved  Boolean  @default(false)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model EmergencyAlert {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  isActive  Boolean  @default(true)
+  createdById String
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}

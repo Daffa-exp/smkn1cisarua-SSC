@@ -1,0 +1,57 @@
+{
+  "name": "SMKN 1 CISARUA CONNECT",
+  "short_name": "SSC",
+  "description": "One platform for school information, communication, reporting, and student services.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#1d4ed8",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "id",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Buka dashboard siswa",
+      "url": "/dashboard"
+    },
+    {
+      "name": "Pengumuman",
+      "short_name": "Pengumuman",
+      "description": "Lihat pengumuman terbaru",
+      "url": "/announcements"
+    },
+    {
+      "name": "Jadwal",
+      "short_name": "Jadwal",
+      "description": "Lihat jadwal pelajaran",
+      "url": "/schedule"
+    }
+  ]
+}
