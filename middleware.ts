@@ -1,8 +1,34 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyJWTToken, COOKIE_NAME } from '@/lib/jwt';
 
+const COOKIE_NAME = 'ssc_auth_token';
 const PUBLIC_ROUTES = ['/login', '/api/auth/login', '/api/auth/logout', '/api/seed'];
+
+// Pure Web Standard JWT Payload Parser (Zero external module dependencies for 100% Vercel Edge compatibility)
+function parseJWTPayload(token: string) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    
+    // Check token expiration
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      return null;
+    }
+    
+    return payload;
+  } catch (error) {
+    return null;
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -17,7 +43,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(COOKIE_NAME)?.value;
-  const user = token ? await verifyJWTToken(token) : null;
+  const user = token ? parseJWTPayload(token) : null;
 
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
