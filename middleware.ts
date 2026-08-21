@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyJWTToken, COOKIE_NAME } from '@/lib/auth';
+import { verifyJWTToken, COOKIE_NAME } from '@/lib/jwt';
 
 const PUBLIC_ROUTES = ['/login', '/api/auth/login', '/api/auth/logout', '/api/seed'];
 
