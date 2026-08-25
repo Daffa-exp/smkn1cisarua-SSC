@@ -26,6 +26,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, reply });
   } catch (error: any) {
+    console.error('[AI] Chat error:', error?.status, error?.message || error);
     let clientMessage = 'Gagal menghubungi AI. Coba lagi sebentar.';
 
     if (error?.message === 'API_KEY_MISSING') {

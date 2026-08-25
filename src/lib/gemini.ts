@@ -70,10 +70,8 @@ export async function generateChatResponse(
 
   // Ultra-fast model priority list (gemini-flash-lite-latest achieves ~600ms latency):
   const modelsToTry = [
-    'gemini-flash-lite-latest',
-    'gemini-3.5-flash-lite',
-    'gemini-3.1-flash-lite',
-    'gemini-flash-latest',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
   ];
   
   let lastError: any = null;
@@ -104,7 +102,7 @@ export async function generateChatResponse(
       }
     } catch (err: any) {
       lastError = err;
-      console.error(`Gemini Model ${modelName} failed:`, err?.status, err?.message || err);
+      console.error(`[AI] Model ${modelName} failed:`, err?.status, err?.message || err);
       if (err?.message?.includes('API key not valid') || (err?.status === 400 && err?.message?.includes('API_KEY'))) {
         throw new Error('API_KEY_INVALID');
       }

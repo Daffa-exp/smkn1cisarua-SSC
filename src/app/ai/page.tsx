@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SchoolLogo, SchoolLogoAvatar } from '@/components/ui/SchoolLogo';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Badge } from '@/components/ui/Badge';
@@ -53,14 +53,25 @@ export default function AIPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const messagesRef = useRef(messages);
+  const isLoadingRef = useRef(isLoading);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   const welcome = user ? (welcomeMessage[user.role] || welcomeMessage.STUDENT) : '';
 
   const handleSend = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    const trimmed = text.trim();
+    if (!trimmed || isLoadingRef.current) return;
 
-    const userMessage: Message = { role: 'user', parts: text.trim() };
-    const newMessages = [...messages, userMessage];
+    const userMessage: Message = { role: 'user', parts: trimmed };
+    const newMessages = [...messagesRef.current, userMessage];
     setMessages(newMessages);
     setError(null);
     setIsLoading(true);

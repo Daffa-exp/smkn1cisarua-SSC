@@ -2,27 +2,39 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const COOKIE_NAME = 'ssc_auth_token';
-const PUBLIC_ROUTES = ['/login', '/api/auth/login', '/api/auth/logout', '/api/seed'];
+const PUBLIC_ROUTES = ['/', '/login', '/api/auth/login', '/api/auth/logout', '/api/seed'];
 
-// Bulletproof Web Standard JWT Payload Parser
+// Bulletproof UTF-8 Safe Base64 JWT Payload Parser for Vercel Edge Runtime
 function parseJWTPayload(token: string) {
+  if (!token || typeof token !== 'string') return null;
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const pad = base64.length % 4;
-    const paddedBase64 = pad ? base64 + '='.repeat(4 - pad) : base64;
-    
-    const jsonStr = atob(paddedBase64);
+
+    let base64Url = parts[1];
+    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) {
+      base64 += '=';
+    }
+
+    // Safely decode Base64 UTF-8 string in Edge environment
+    let jsonStr = '';
+    if (typeof Buffer !== 'undefined') {
+      jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
+    } else {
+      jsonStr = decodeURIComponent(
+        Array.from(atob(base64))
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+    }
+
     const payload = JSON.parse(jsonStr);
-    
-    // Check expiration
+
     if (payload && payload.exp && Date.now() >= payload.exp * 1000) {
       return null;
     }
-    
+
     return payload;
   } catch (error) {
     return null;
@@ -33,10 +45,12 @@ export async function middleware(request: NextRequest) {
   try {
     const { pathname } = request.nextUrl;
 
-    // Static assets & next internal routes bypass
+    // Static assets, favicon, manifest, and internalNext bypass
     if (
       pathname.startsWith('/_next') ||
-      pathname.startsWith('/favicon.ico') ||
+      pathname.startsWith('/favicon') ||
+      pathname.startsWith('/icon') ||
+      pathname.startsWith('/manifest') ||
       pathname.includes('.')
     ) {
       return NextResponse.next();
@@ -49,27 +63,27 @@ export async function middleware(request: NextRequest) {
 
     // If going to /login while logged in, redirect to /dashboard
     if (pathname === '/login' && user) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return NextResponse.redirect(new URL('/dashboard', request.nextUrl));
     }
 
     // If trying to access protected route without login, redirect to /login
     if (!isPublicRoute && !user && pathname !== '/login') {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.nextUrl));
     }
 
-    // Admin route role authorization check (ADMIN, SUPER_ADMIN, STUDENT_LEADER / Ketos & Waketos)
+    // Admin route role authorization check
     if (pathname.startsWith('/admin')) {
       if (
         !user ||
         (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'STUDENT_LEADER')
       ) {
-        return NextResponse.redirect(new URL('/unauthorized', request.url));
+        return NextResponse.redirect(new URL('/unauthorized', request.nextUrl));
       }
     }
 
     return NextResponse.next();
   } catch (err) {
-    // Fail-safe protection: prevent any middleware invocation failure 500 error
+    // Fail-safe protection: allow request through if any edge error occurs
     return NextResponse.next();
   }
 }
