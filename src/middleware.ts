@@ -1,8 +1,50 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyJWTToken, COOKIE_NAME } from '@/lib/jwt';
 
+const COOKIE_NAME = 'ssc_auth_token';
 const PUBLIC_ROUTES = ['/', '/login', '/api/auth/login', '/api/auth/logout', '/api/seed'];
+
+async function getJwtSecret() {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) return null;
+  return new TextEncoder().encode(secret);
+}
+
+async function verifyJWTToken(token: string): Promise<any> {
+  try {
+    const secret = await getJwtSecret();
+    if (!secret) return null;
+
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+
+    const data = `${headerB64}.${payloadB64}`;
+    const signature = Uint8Array.from(atob(signatureB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+
+    const header = JSON.parse(atob(headerB64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (header.alg !== 'HS256') return null;
+
+    const key = await crypto.subtle.importKey(
+      'raw',
+      secret,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+
+    const valid = await crypto.subtle.verify('HMAC', key, signature, new TextEncoder().encode(data));
+    if (!valid) return null;
+
+    const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (payload.exp && Date.now() >= payload.exp * 1000) return null;
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 export async function middleware(request: NextRequest) {
   try {
@@ -19,9 +61,7 @@ export async function middleware(request: NextRequest) {
     }
 
     const token = request.cookies.get(COOKIE_NAME)?.value;
-    console.error('[MW-DEBUG] hasToken=', !!token, 'secret=', !!process.env.NEXTAUTH_SECRET);
     const user = token ? await verifyJWTToken(token) : null;
-    console.error('[MW-DEBUG] user=', user ? user.role : null);
 
     const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
@@ -47,8 +87,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 }
-
-export const runtime = 'nodejs';
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
