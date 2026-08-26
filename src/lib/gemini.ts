@@ -68,10 +68,10 @@ export async function generateChatResponse(
   const genAI = new GoogleGenerativeAI(apiKey.trim());
   const systemPrompt = buildSystemPrompt(userRole, userName);
 
-  // Ultra-fast model priority list (gemini-flash-lite-latest achieves ~600ms latency):
+  // Model priority list:
   const modelsToTry = [
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-pro-latest',
+    'gemini-3.6-flash',
+    'gemini-3.1-pro-preview',
   ];
   
   let lastError: any = null;
