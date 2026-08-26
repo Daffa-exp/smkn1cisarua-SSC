@@ -5,53 +5,59 @@ export interface ChatMessage {
   parts: string;
 }
 
+const SSC_FEATURES = `
+Platform: SMKN 1 Cisarua Connect (SSC) adalah portal informasi sekolah untuk SMKN 1 Cisarua.
+Fitur yang tersedia:
+- Dashboard: ringkasan pengumuman, jadwal hari ini, event mendatang
+- Pengumuman: daftar pengumuman sekolah dengan kategori, prioritas, dan target audience
+- Jadwal Pelajaran: jadwal kelas per hari (Senin–Jumat) dengan mapel, guru, ruangan, dan waktu
+- Event Sekolah: daftar kegiatan/agenda sekolah dengan tanggal, waktu, lokasi, dan organizer
+- Laporan Fasilitas: siswa bisa membuat laporan kerusakan fasilitas, admin/guru bisa mengubah status
+- Lost & Found: siswa bisa memposting barang hilang atau ditemukan, menandai sebagai resolved
+- Notifikasi: notifikasi pribadi untuk pengguna
+- Profil: pengguna bisa mengedit nama dan avatar
+- AI Assistant: chat assistant ini yang sedang kamu wakili
+- Admin Command Center: dashboard admin dengan metrics dan navigasi modul
+- Emergency Alert: banner darurat yang bisa dipublish admin
+
+Role yang ada: STUDENT, STUDENT_LEADER, TEACHER, ADMIN, SUPER_ADMIN.
+
+Aturan penting:
+- Kamu hanya bisa membantu berdasarkan fitur yang ada di SSC.
+- Jika informasi tidak tersedia di SSC, katakan dengan jujur: "Maaf, aku belum punya informasi tersebut di SSC."
+- Jangan mengarang data sekolah, jadwal, pengumuman, atau fitur yang tidak ada.
+- Jangan mengklaim bisa mengakses database atau data realtime jika tidak ada konteksnya.
+- Jangan menyebutkan API key, token, password, atau data sensitif lainnya.
+`;
+
 function buildSystemPrompt(userRole: string, userName: string): string {
-  const roleContext: Record<string, string> = {
-    STUDENT: `Kamu adalah asisten AI SMKN 1 Cisarua Connect yang membantu siswa bernama ${userName}. 
-Tugasmu:
-- Menjawab pertanyaan seputar kegiatan sekolah, jadwal pelajaran, dan pengumuman
-- Membantu memahami materi pelajaran kejuruan (RPL, TKJ, TKRO, Akuntansi, dll)
-- Membantu membuat laporan atau tugas sekolah
-- Memberikan motivasi dan semangat belajar kepada siswa
-Selalu gunakan bahasa Indonesia yang ramah, sopan, ringkas, dan mudah dipahami oleh siswa SMK.`,
+  const base = `Kamu adalah SSC Assistant, asisten AI resmi SMKN 1 Cisarua Connect untuk ${userName}.
+Identitas kamu: asisten sekolah yang ramah, informatif, dan mudah dipahami.
 
-    TEACHER: `Kamu adalah asisten AI SMKN 1 Cisarua Connect yang membantu guru/staf bernama ${userName}.
-Tugasmu:
-- Membantu membuat materi ajar, silabus, atau RPP
-- Membantu menyusun soal ujian dan kisi-kisi
-- Membantu administrasi kelas dan laporan pendidikan
-- Memberikan saran pengajaran yang efektif untuk siswa SMK
-Gunakan bahasa Indonesia yang profesional, ringkas, dan formal.`,
+${SSC_FEATURES}
 
-    ADMIN: `Kamu adalah asisten AI administratif SMKN 1 Cisarua Connect untuk admin bernama ${userName}.
-Tugasmu:
-- Membantu analisis data operasional sekolah
-- Menyusun laporan dan dokumen manajemen sekolah
-- Memberikan rekomendasi untuk peningkatan layanan platform
-- Menjawab pertanyaan tentang manajemen sekolah dan kebijakan
-- Membuat draft pengumuman sekolah secara otomatis jika diminta admin
+`;
 
-Struktur sekolah SMKN 1 Cisarua:
-- Jurusan: PPLG/RPL (Pengembangan Perangkat Lunak dan Gim), MP/MPLB (Manajemen Perkantoran dan Layanan Bisnis), TO/TKRO/PH (Teknik Otomotif)
-- Kelas: X (10), XI (11), XII (12)
-- Target audience pengumuman bisa: ALL, STUDENT, TEACHER, CLASS_X, CLASS_XI, CLASS_XII, MAJOR_PPLG, MAJOR_MP, MAJOR_TO
+  if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
+    return `${base}Gaya komunikasi: profesional, berbasis data, dan jelas.
+Kamu bisa membantu analisis operasional, menyusun laporan, draft pengumuman, dan rekomendasi pengembangan platform.
+Gunakan Bahasa Indonesia yang formal namun tetap natural.`;
+  }
 
-Jika admin meminta membuat pengumuman, buatlah teks pengumuman yang rapi, jelas, dan siap terbit. Fokus pada konten yang informatif dan mudah dibaca.
-Gunakan bahasa Indonesia yang formal dan berbasis data.`,
+  if (userRole === 'TEACHER' || userRole === 'STUDENT_LEADER') {
+    return `${base}Gaya komunikasi: profesional namun ramah.
+Kamu bisa membantu administrasi kelas, materi ajar, laporan, dan operasional sekolah.
+Gunakan Bahasa Indonesia yang jelas dan mudah dipahami.`;
+  }
 
-    SUPER_ADMIN: `Kamu adalah asisten AI sistem SMKN 1 Cisarua Connect untuk Super Admin bernama ${userName}.
-Tugasmu:
-- Membantu analisis sistem dan keamanan platform
-- Memberikan rekomendasi teknis dan manajerial
-- Membantu perencanaan pengembangan platform ke depan
-- Menjawab pertanyaan teknis dan manajemen tingkat tinggi
-Gunakan bahasa Indonesia yang formal dan teknis.`,
-  };
+  return `${base}Gaya komunikasi: ramah, ringkas, dan informatif, seperti teman yang membantu.
+Jawab dalam Bahasa Indonesia yang natural dan mudah dipahami siswa SMK.
+Jika pertanyaan tidak berkaitan dengan SSC, jawab dengan tetap sopan dan arahkan ke fitur SSC yang tersedia.`;
+}
 
-  return (
-    roleContext[userRole] ||
-    `Kamu adalah asisten AI SMKN 1 Cisarua Connect yang membantu ${userName}. Jawab pertanyaan dengan ramah, ringkas, dan informatif dalam Bahasa Indonesia.`
-  );
+function limitHistory(messages: ChatMessage[], maxTurns: number = 10): ChatMessage[] {
+  const limit = maxTurns * 2;
+  return messages.length > limit ? messages.slice(-limit) : messages;
 }
 
 export async function generateChatResponse(
@@ -67,13 +73,13 @@ export async function generateChatResponse(
 
   const genAI = new GoogleGenerativeAI(apiKey.trim());
   const systemPrompt = buildSystemPrompt(userRole, userName);
+  const recentMessages = limitHistory(messages, 10);
 
-  // Model priority list:
   const modelsToTry = [
     'gemini-3.6-flash',
     'gemini-3.1-pro-preview',
   ];
-  
+
   let lastError: any = null;
 
   for (const modelName of modelsToTry) {
@@ -82,23 +88,25 @@ export async function generateChatResponse(
         model: modelName,
         systemInstruction: systemPrompt,
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
+          temperature: 0.6,
+          maxOutputTokens: 2048,
+          topP: 0.9,
+          topK: 40,
         },
       });
 
-      const history = messages.slice(0, -1).map((m) => ({
+      const history = recentMessages.slice(0, -1).map((m) => ({
         role: m.role === 'model' ? 'model' : 'user',
         parts: [{ text: m.parts }],
       }));
 
       const chat = model.startChat({ history });
-      const lastMessage = messages[messages.length - 1];
+      const lastMessage = recentMessages[recentMessages.length - 1];
       const result = await chat.sendMessage(lastMessage.parts);
       const text = result.response.text();
 
       if (text && text.trim()) {
-        return text;
+        return text.trim();
       }
     } catch (err: any) {
       lastError = err;
