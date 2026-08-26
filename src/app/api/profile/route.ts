@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, hashPassword, verifyPassword } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export async function PATCH(request: Request) {
@@ -13,7 +13,65 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json();
-    const { name, avatarUrl } = body as { name?: string; avatarUrl?: string | null };
+    const { name, avatarUrl, currentPassword, newPassword, confirmPassword } = body as Record<string, unknown>;
+
+    if (currentPassword !== undefined || newPassword !== undefined || confirmPassword !== undefined) {
+      if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || typeof confirmPassword !== 'string') {
+        return NextResponse.json(
+          { success: false, message: 'Semua field password wajib diisi.' },
+          { status: 400 }
+        );
+      }
+
+      if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+        return NextResponse.json(
+          { success: false, message: 'Semua field password wajib diisi.' },
+          { status: 400 }
+        );
+      }
+
+      if (newPassword !== confirmPassword) {
+        return NextResponse.json(
+          { success: false, message: 'Konfirmasi password tidak cocok.' },
+          { status: 400 }
+        );
+      }
+
+      if (newPassword.length < 6) {
+        return NextResponse.json(
+          { success: false, message: 'Password baru minimal 6 karakter.' },
+          { status: 400 }
+        );
+      }
+
+      const user = await db.user.findUnique({
+        where: { id: session.id },
+        select: { id: true, passwordHash: true },
+      });
+
+      if (!user) {
+        return NextResponse.json(
+          { success: false, message: 'Pengguna tidak ditemukan.' },
+          { status: 404 }
+        );
+      }
+
+      const isValidCurrent = await verifyPassword(currentPassword, user.passwordHash);
+      if (!isValidCurrent) {
+        return NextResponse.json(
+          { success: false, message: 'Password saat ini salah.' },
+          { status: 400 }
+        );
+      }
+
+      const newHash = await hashPassword(newPassword);
+      await db.user.update({
+        where: { id: session.id },
+        data: { passwordHash: newHash },
+      });
+
+      return NextResponse.json({ success: true, message: 'Password berhasil diubah.' });
+    }
 
     const data: { name?: string; avatarUrl?: string | null } = {};
 

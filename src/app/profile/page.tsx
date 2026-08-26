@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
-import { User, Shield, BookOpen, Hash, Mail, ShieldCheck, Camera, Trash2, Loader2, Save } from 'lucide-react';
+import { User, Shield, BookOpen, Hash, Mail, ShieldCheck, Camera, Trash2, Loader2, Save, Lock, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ConfirmLogoutModal } from '@/components/ui/ConfirmLogoutModal';
@@ -44,6 +45,17 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   const hasChanges = name.trim() !== originalName || avatar !== originalAvatar;
 
@@ -121,6 +133,40 @@ export default function ProfilePage() {
       setError('Terjadi kesalahan saat menyimpan.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    setChangingPassword(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setPasswordError(data.message || 'Gagal mengubah password.');
+      } else {
+        setPasswordSuccess('Password berhasil diubah.');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => {
+          setIsPasswordModalOpen(false);
+          setPasswordSuccess(null);
+        }, 1500);
+      }
+    } catch {
+      setPasswordError('Terjadi kesalahan saat mengubah password.');
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -268,7 +314,7 @@ export default function ProfilePage() {
 
         {/* Actions */}
         <div className="flex flex-col-reverse items-center justify-between gap-3 border-t border-slate-100 p-6 sm:flex-row sm:p-8 dark:border-white/5">
-          <Button variant="outline" size="sm" className="w-full sm:w-auto">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setIsPasswordModalOpen(true)}>
             Ubah Password
           </Button>
           <div className="flex w-full gap-2 sm:w-auto">
@@ -294,6 +340,95 @@ export default function ProfilePage() {
         onClose={() => setIsLogoutModalOpen(false)}
         onConfirm={logout}
       />
+
+      <Modal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} title="Ubah Password">
+        <div className="space-y-4">
+          {(passwordError || passwordSuccess) && (
+            <div
+              className={`rounded-lg border px-3.5 py-2.5 text-xs ${
+                passwordError
+                  ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+              }`}
+            >
+              {passwordError || passwordSuccess}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Password Saat Ini</label>
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 pr-10 text-sm text-slate-800 outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
+                placeholder="Masukkan password saat ini"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label={showCurrentPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Password Baru</label>
+            <div className="relative">
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 pr-10 text-sm text-slate-800 outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
+                placeholder="Minimal 6 karakter"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label={showNewPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Konfirmasi Password Baru</label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 pr-10 text-sm text-slate-800 outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
+                placeholder="Ulangi password baru"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label={showConfirmPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" size="sm" onClick={() => setIsPasswordModalOpen(false)} disabled={changingPassword}>
+              Batal
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleChangePassword} disabled={changingPassword}>
+              {changingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+              {changingPassword ? 'Menyimpan...' : 'Ubah Password'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

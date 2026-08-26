@@ -1,8 +1,26 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Users, ArrowLeft, Search, GraduationCap, UserCheck, Shield, Plus, FileText, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import {
+  Users,
+  ArrowLeft,
+  Search,
+  GraduationCap,
+  Plus,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  FileType2,
+  File,
+  Trash2,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -19,6 +37,17 @@ interface UserItem {
   createdAt: string;
 }
 
+interface PreviewRow {
+  row: number;
+  name: string;
+  email: string;
+  nis: string;
+  class: string;
+  major: string;
+  status: 'valid' | 'error' | 'duplicate';
+  errors: string[];
+}
+
 const roleVariantMap: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
   STUDENT: 'info',
   STUDENT_LEADER: 'warning',
@@ -32,14 +61,26 @@ export default function AdminStudentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeRole, setActiveRole] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isBulkTextModalOpen, setIsBulkTextModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
 
-  // Bulk register state
+  // Text bulk register state
   const [className, setClassName] = useState('X RPL 1');
   const [major, setMajor] = useState('Rekayasa Perangkat Lunak');
   const [rawText, setRawText] = useState('');
   const [bulkStatus, setBulkStatus] = useState<{ success: boolean; text: string } | null>(null);
   const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+
+  // File import state
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
+  const [previewSummary, setPreviewSummary] = useState<{ total: number; valid: number; error: number; duplicate: number } | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: boolean; text: string } | null>(null);
+  const [errorReport, setErrorReport] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -59,7 +100,7 @@ export default function AdminStudentsPage() {
     fetchUsers();
   }, []);
 
-  const handleBulkSubmit = async (e: React.FormEvent) => {
+  const handleBulkTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBulkStatus(null);
     setIsSubmittingBulk(true);
@@ -87,6 +128,120 @@ export default function AdminStudentsPage() {
     } finally {
       setIsSubmittingBulk(false);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImportFile(file);
+      setPreviewRows([]);
+      setPreviewSummary(null);
+      setImportResult(null);
+      setErrorReport(null);
+    }
+  };
+
+  const handlePreview = async () => {
+    if (!importFile) return;
+
+    setIsPreviewLoading(true);
+    setPreviewRows([]);
+    setPreviewSummary(null);
+    setImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('action', 'preview');
+
+      const res = await fetch('/api/admin/students/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        alert(data.message || 'Gagal memproses file.');
+        setIsPreviewLoading(false);
+        return;
+      }
+
+      setPreviewRows(data.preview);
+      setPreviewSummary(data.summary);
+    } catch (err) {
+      alert('Masalah koneksi server.');
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!previewRows.length) return;
+
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('action', 'confirm');
+      formData.append('previewData', JSON.stringify(previewRows));
+
+      const res = await fetch('/api/admin/students/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setImportResult({ success: false, text: data.message || 'Gagal import data.' });
+      } else {
+        setImportResult({ success: true, text: data.message });
+        setErrorReport(
+          data.errors?.length
+            ? data.errors.join('\n')
+            : null
+        );
+        fetchUsers();
+      }
+    } catch (err) {
+      setImportResult({ success: false, text: 'Masalah koneksi server.' });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleDownloadErrorReport = () => {
+    if (!errorReport) return;
+    const blob = new Blob([errorReport], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `error-report-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = (format: 'csv' | 'xlsx' | 'pdf') => {
+    const params = new URLSearchParams();
+    params.set('format', format);
+    if (activeRole !== 'ALL') params.set('role', activeRole);
+    window.open(`/api/admin/students/export?${params.toString()}`, '_blank');
+    setIsExportMenuOpen(false);
+  };
+
+  const handleDownloadTemplate = (format: 'xlsx' | 'csv') => {
+    window.open(`/api/admin/students/template?format=${format}`, '_blank');
+    setIsTemplateMenuOpen(false);
+  };
+
+  const resetImport = () => {
+    setImportFile(null);
+    setPreviewRows([]);
+    setPreviewSummary(null);
+    setImportResult(null);
+    setErrorReport(null);
   };
 
   const filteredUsers = users.filter((u) => {
@@ -119,13 +274,74 @@ export default function AdminStudentsPage() {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setIsBulkModalOpen(true)}
-          className="text-xs"
-        >
-          <Plus className="w-4 h-4" /> Registrasi Siswa Per Kelas
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsTemplateMenuOpen(!isTemplateMenuOpen)}
+              className="text-xs"
+            >
+              <Download className="w-4 h-4" /> Template
+            </Button>
+            {isTemplateMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 z-20 w-40 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                <button
+                  onClick={() => handleDownloadTemplate('xlsx')}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> Excel (.xlsx)
+                </button>
+                <button
+                  onClick={() => handleDownloadTemplate('csv')}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <FileType2 className="w-3.5 h-3.5" /> CSV (.csv)
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+              className="text-xs"
+            >
+              <Upload className="w-4 h-4" /> Export
+            </Button>
+            {isExportMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 z-20 w-40 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <FileType2 className="w-3.5 h-3.5" /> CSV
+                </button>
+                <button
+                  onClick={() => handleExport('xlsx')}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> Excel (.xlsx)
+                </button>
+                <button
+                  onClick={() => handleExport('pdf')}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <File className="w-3.5 h-3.5" /> PDF
+                </button>
+              </div>
+            )}
+          </div>
+
+          <Button variant="primary" size="sm" onClick={() => setIsImportModalOpen(true)} className="text-xs">
+            <Upload className="w-4 h-4" /> Import Data Siswa
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setIsBulkTextModalOpen(true)} className="text-xs">
+            <Plus className="w-4 h-4" /> Registrasi Teks
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -212,8 +428,8 @@ export default function AdminStudentsPage() {
         </div>
       )}
 
-      {/* Bulk Register Modal */}
-      {isBulkModalOpen && (
+      {/* Text Bulk Register Modal */}
+      {isBulkTextModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -222,7 +438,7 @@ export default function AdminStudentsPage() {
                 Registrasi Siswa Per Kelas (Data Resmi NIS)
               </h3>
               <button
-                onClick={() => setIsBulkModalOpen(false)}
+                onClick={() => setIsBulkTextModalOpen(false)}
                 className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -246,12 +462,10 @@ export default function AdminStudentsPage() {
               </div>
             )}
 
-            <form onSubmit={handleBulkSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleBulkTextSubmit} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
-                    Nama Kelas *
-                  </label>
+                  <label className="font-semibold text-slate-700 block mb-1">Nama Kelas *</label>
                   <input
                     type="text"
                     required
@@ -262,9 +476,7 @@ export default function AdminStudentsPage() {
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
-                    Jurusan *
-                  </label>
+                  <label className="font-semibold text-slate-700 block mb-1">Jurusan *</label>
                   <input
                     type="text"
                     required
@@ -277,12 +489,8 @@ export default function AdminStudentsPage() {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Daftar NIS & Nama Siswa (1 Baris per Siswa) *
-                </label>
-                <p className="text-[11px] text-slate-400 mb-1.5">
-                  Format: <code>NIS, Nama Siswa, Email(Opsional)</code>
-                </p>
+                <label className="font-semibold text-slate-700 block mb-1">Daftar NIS & Nama Siswa (1 Baris per Siswa) *</label>
+                <p className="text-[11px] text-slate-400 mb-1.5">Format: <code>NIS, Nama Siswa, Email(Opsional)</code></p>
                 <textarea
                   required
                   rows={6}
@@ -302,7 +510,7 @@ export default function AdminStudentsPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsBulkModalOpen(false)}
+                  onClick={() => setIsBulkTextModalOpen(false)}
                   disabled={isSubmittingBulk}
                 >
                   Tutup
@@ -312,6 +520,167 @@ export default function AdminStudentsPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* File Import Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-brand-600" />
+                Import Data Siswa
+              </h3>
+              <button
+                onClick={() => { setIsImportModalOpen(false); resetImport(); }}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!previewRows.length ? (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center">
+                  <Upload className="w-10 h-10 text-slate-400 mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-slate-700 mb-1">Upload File Excel atau CSV</p>
+                  <p className="text-xs text-slate-400 mb-4">Format yang didukung: .xlsx, .csv</p>
+                  <input
+                    type="file"
+                    accept=".xlsx,.csv"
+                    onChange={handleFileChange}
+                    className="block mx-auto text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
+                  />
+                  {importFile && (
+                    <p className="text-xs text-slate-500 mt-2">File: {importFile.name}</p>
+                  )}
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handlePreview}
+                    disabled={!importFile || isPreviewLoading}
+                    isLoading={isPreviewLoading}
+                  >
+                    Preview Data
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {previewSummary && (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+                      <p className="text-lg font-bold text-emerald-700">{previewSummary.valid}</p>
+                      <p className="text-[10px] text-emerald-600">Valid</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-center">
+                      <p className="text-lg font-bold text-amber-700">{previewSummary.duplicate}</p>
+                      <p className="text-[10px] text-amber-600">Duplicate</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-center">
+                      <p className="text-lg font-bold text-rose-700">{previewSummary.error}</p>
+                      <p className="text-[10px] text-rose-600">Error</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2.5 font-semibold text-slate-600">No</th>
+                        <th className="text-left p-2.5 font-semibold text-slate-600">Nama</th>
+                        <th className="text-left p-2.5 font-semibold text-slate-600">Email</th>
+                        <th className="text-left p-2.5 font-semibold text-slate-600">NIS</th>
+                        <th className="text-left p-2.5 font-semibold text-slate-600">Kelas</th>
+                        <th className="text-left p-2.5 font-semibold text-slate-600">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {previewRows.map((row) => (
+                        <tr key={row.row} className="hover:bg-slate-50">
+                          <td className="p-2.5 text-slate-500">{row.row}</td>
+                          <td className="p-2.5 font-medium text-slate-800">{row.name}</td>
+                          <td className="p-2.5 text-slate-500">{row.email}</td>
+                          <td className="p-2.5 font-mono text-slate-700">{row.nis}</td>
+                          <td className="p-2.5 text-slate-500">{row.class}</td>
+                          <td className="p-2.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold ${
+                                row.status === 'valid'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : row.status === 'duplicate'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}
+                            >
+                              {row.status === 'valid' ? 'Valid' : row.status === 'duplicate' ? 'Duplicate' : 'Error'}
+                            </span>
+                            {row.errors.length > 0 && (
+                              <p className="text-[10px] text-rose-600 mt-0.5">{row.errors[0]}</p>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {importResult && (
+                  <div
+                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                      importResult.success
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                        : 'bg-rose-50 border border-rose-200 text-rose-700'
+                    }`}
+                  >
+                    {importResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{importResult.text}</span>
+                  </div>
+                )}
+
+                {errorReport && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-slate-700">Detail Error</p>
+                      <Button variant="ghost" size="sm" onClick={handleDownloadErrorReport} className="text-xs h-7">
+                        <Download className="w-3 h-3" /> Download Report
+                      </Button>
+                    </div>
+                    <pre className="text-[10px] text-slate-600 whitespace-pre-wrap max-h-32 overflow-y-auto">{errorReport}</pre>
+                  </div>
+                )}
+
+                <div className="flex justify-between pt-3 border-t border-slate-100">
+                  <Button variant="outline" size="sm" onClick={resetImport} disabled={isImporting}>
+                    <RefreshCw className="w-4 h-4" /> Upload Ulang
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setIsImportModalOpen(false)} disabled={isImporting}>
+                      Tutup
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleConfirmImport}
+                      disabled={isImporting || previewSummary?.valid === 0}
+                      isLoading={isImporting}
+                    >
+                      Import {previewSummary?.valid || 0} Siswa
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
