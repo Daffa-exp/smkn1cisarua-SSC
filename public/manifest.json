@@ -4,7 +4,7 @@
   "description": "One platform for school information, communication, reporting, and student services.",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#f8fafc",
+  "background_color": "#ffffff",
   "theme_color": "#1d4ed8",
   "orientation": "portrait-primary",
   "scope": "/",
