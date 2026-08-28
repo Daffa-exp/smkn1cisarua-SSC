@@ -1,55 +1,45 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getSession } from '@/lib/auth';
 
-// PATCH deactivate emergency alert
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET() {
   try {
-    const session = await getSession();
-
-    if (!session || (session.role !== 'ADMIN' && session.role !== 'SUPER_ADMIN')) {
-      return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
-    }
-
-    const updated = await db.emergencyAlert.update({
-      where: { id: params.id },
-      data: { isActive: false },
+    const alerts = await db.emergencyAlert.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Status peringatan darurat berhasil dinonaktifkan.',
-      alert: updated,
-    });
+    return NextResponse.json({ success: true, alerts });
   } catch (error) {
-    return NextResponse.json({ success: false, message: 'Gagal memperbarui siaran darurat.' }, { status: 500 });
+    return NextResponse.json({ success: false, alerts: [] }, { status: 500 });
   }
 }
 
-// DELETE emergency alert record
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request) {
   try {
-    const session = await getSession();
+    const body = await request.json();
+    const { title, message, createdById } = body;
 
-    if (!session || (session.role !== 'ADMIN' && session.role !== 'SUPER_ADMIN')) {
-      return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
+    if (!title || !message) {
+      return NextResponse.json(
+        { success: false, message: 'Judul dan pesan peringatan wajib diisi.' },
+        { status: 400 }
+      );
     }
 
-    await db.emergencyAlert.delete({
-      where: { id: params.id },
+    const alert = await db.emergencyAlert.create({
+      data: {
+        title,
+        message,
+        createdById: createdById || 'system',
+      },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Rekaman peringatan darurat dihapus.',
+      message: 'Peringatan darurat berhasil diterbitkan.',
+      alert,
     });
   } catch (error) {
-    return NextResponse.json({ success: false, message: 'Gagal menghapus rekaman.' }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Gagal menerbitkan peringatan darurat.' }, { status: 500 });
   }
 }
