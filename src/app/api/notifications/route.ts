@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { sendPushToRole } from '@/lib/push';
 
 export async function GET() {
   try {
@@ -80,6 +81,13 @@ export async function POST(request: Request) {
         userId: user.id,
       })),
     });
+
+    const targetRoleForPush = targetRole === 'ALL' ? 'ALL' : targetRole;
+    sendPushToRole(targetRoleForPush, {
+      title,
+      body: message,
+      url: '/notifications',
+    }).catch((err) => console.error('[push] notification broadcast failed:', err));
 
     return NextResponse.json({
       success: true,
