@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 
+export async function GET() {
+  try {
+    const schedules = await db.schedule.findMany({
+      orderBy: [{ day: 'asc' }, { startTime: 'asc' }],
+    });
+
+    return NextResponse.json({ success: true, schedules });
+  } catch (error) {
+    return NextResponse.json({ success: false, schedules: [] }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const session = await getSession();
@@ -14,8 +26,30 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { rawText } = body;
+    const { rawText, subject, teacher, className, room, day, startTime, endTime } = body;
 
+    // Single schedule creation from form modal
+    if (subject && teacher && className && room && day && startTime && endTime) {
+      const schedule = await db.schedule.create({
+        data: {
+          subject,
+          teacher,
+          className,
+          room,
+          day,
+          startTime,
+          endTime,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Jadwal berhasil ditambahkan.',
+        schedule,
+      });
+    }
+
+    // Bulk CSV import
     if (!rawText) {
       return NextResponse.json(
         { success: false, message: 'Data CSV jadwal tidak boleh kosong.' },
@@ -27,7 +61,6 @@ export async function POST(request: Request) {
     const scheduleItems = [];
 
     for (const line of lines) {
-      // Header bypass
       if (line.toLowerCase().includes('subject') || line.toLowerCase().includes('mata pelajaran')) {
         continue;
       }
@@ -63,6 +96,6 @@ export async function POST(request: Request) {
       count: scheduleItems.length,
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, message: 'Gagal mengimpor jadwal.' }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Gagal menyimpan jadwal.' }, { status: 500 });
   }
 }
