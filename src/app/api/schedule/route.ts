@@ -2,9 +2,17 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const day = searchParams.get('day') || undefined;
+    const className = searchParams.get('class') || undefined;
+
     const schedules = await db.schedule.findMany({
+      where: {
+        ...(day ? { day } : {}),
+        ...(className ? { className } : {}),
+      },
       orderBy: [{ day: 'asc' }, { startTime: 'asc' }],
     });
 
