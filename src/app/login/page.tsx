@@ -108,15 +108,15 @@ export default function LoginPage() {
             >
               <LogIn className="w-4 h-4" /> Masuk ke Akun
             </Button>
-            <div className="text-center">
-              <Link
-                href="/forgot-password"
-                className="text-xs font-semibold text-brand-600 hover:underline"
-              >
-                Lupa Password?
-              </Link>
-            </div>
           </form>
+          <div className="text-center">
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
+              Lupa Password?
+            </Link>
+          </div>
         </div>
       </div>
     </div>

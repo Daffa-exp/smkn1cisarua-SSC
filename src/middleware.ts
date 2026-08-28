@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const COOKIE_NAME = 'ssc_auth_token';
-const PUBLIC_ROUTES = ['/', '/login', '/api/auth/login', '/api/auth/logout', '/api/seed'];
+const PUBLIC_ROUTES = ['/', '/login', '/forgot-password', '/reset-password', '/api/auth/login', '/api/auth/logout', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/seed'];
 
 async function getJwtSecret() {
   const secret = process.env.NEXTAUTH_SECRET;
