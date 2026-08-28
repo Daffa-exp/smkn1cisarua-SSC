@@ -7,6 +7,7 @@ import { BottomNav } from './BottomNav';
 import { EmergencyAlertBanner } from '@/components/emergency/EmergencyAlertBanner';
 import { SplashScreen, useSplashScreen } from '@/components/ui/SplashScreen';
 import { FloatingAIButton } from '@/components/ai/FloatingAIButton';
+import { PushNotificationPrompt } from '@/components/notifications/PushNotificationPrompt';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -44,6 +45,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </div>
         <BottomNav />
         <FloatingAIButton />
+        <PushNotificationPrompt />
       </div>
     </div>
   );

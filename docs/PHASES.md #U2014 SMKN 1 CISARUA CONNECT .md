@@ -1,4 +1,4 @@
-# SMKN 1 CISARUA CONNECT — DEVELOPMENT PHASES
+ # SMKN 1 CISARUA CONNECT — DEVELOPMENT PHASES
 
 > **IMPORTANT:** File ini adalah **source of truth development project**.  
 > Setiap AI agent yang mengerjakan repository WAJIB membaca file ini sebelum coding.

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { sendPushToUsers } from '@/lib/push';
 
 // GET detail
 export async function GET(
@@ -74,6 +75,13 @@ export async function PATCH(
         type: status === 'RESOLVED' ? 'INFO' : 'WARNING',
         userId: existingReport.reporterId,
       },
+    });
+
+    await sendPushToUsers([existingReport.reporterId], {
+      title: `UPDATE LAPORAN: ${existingReport.title}`,
+      body: `Status laporan Anda telah diperbarui menjadi: "${statusLabels[status] || status}".`,
+      url: `/reports`,
+      notificationId: existingReport.id,
     });
 
     return NextResponse.json({

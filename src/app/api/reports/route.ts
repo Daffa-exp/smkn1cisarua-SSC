@@ -1,23 +1,16 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { sendPushToUsers } from '@/lib/push';
 
-// GET reports (Student gets own reports, Admin/Teacher gets all)
-export async function GET() {
+// GET detail
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ success: false, reports: [] }, { status: 401 });
-    }
-
-    const isAdmin =
-      session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' || session.role === 'TEACHER';
-
-    const whereCondition = isAdmin ? {} : { reporterId: session.id };
-
-    const reports = await db.incidentReport.findMany({
-      where: whereCondition,
-      orderBy: { createdAt: 'desc' },
+    const report = await db.incidentReport.findUnique({
+      where: { id: params.id },
       include: {
         reporter: {
           select: { name: true, role: true, email: true, class: true },
@@ -25,48 +18,78 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ success: true, reports });
+    if (!report) {
+      return NextResponse.json({ success: false, message: 'Laporan tidak ditemukan.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, report });
   } catch (error) {
-    return NextResponse.json({ success: false, reports: [] }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Server error.' }, { status: 500 });
   }
 }
 
-// POST submit new report
-export async function POST(request: Request) {
+// PATCH status update by Admin/Teacher
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ success: false, message: 'Harap login terlebih dahulu.' }, { status: 401 });
+
+    if (
+      !session ||
+      (session.role !== 'ADMIN' && session.role !== 'SUPER_ADMIN' && session.role !== 'TEACHER')
+    ) {
+      return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
     }
 
     const body = await request.json();
-    const { title, description, category, location, photoUrl } = body;
+    const { status } = body;
 
-    if (!title || !description || !category || !location) {
-      return NextResponse.json(
-        { success: false, message: 'Judul, deskripsi, kategori, dan lokasi wajib diisi.' },
-        { status: 400 }
-      );
+    const existingReport = await db.incidentReport.findUnique({
+      where: { id: params.id },
+    });
+
+    if (!existingReport) {
+      return NextResponse.json({ success: false, message: 'Laporan tidak ditemukan.' }, { status: 404 });
     }
 
-    const report = await db.incidentReport.create({
+    const updated = await db.incidentReport.update({
+      where: { id: params.id },
+      data: { status },
+    });
+
+    // Notify reporter about status update
+    const statusLabels: Record<string, string> = {
+      SUBMITTED: 'Diterima',
+      REVIEWING: 'Sedang Ditinjau',
+      VERIFIED: 'Terverifikasi',
+      IN_PROGRESS: 'Sedang Ditangani (In Progress)',
+      RESOLVED: 'Selesai (Resolved)',
+    };
+
+    await db.notification.create({
       data: {
-        title,
-        description,
-        category,
-        location,
-        photoUrl: photoUrl || null,
-        status: 'SUBMITTED',
-        reporterId: session.id,
+        title: `UPDATE LAPORAN: ${existingReport.title}`,
+        message: `Status laporan Anda telah diperbarui menjadi: "${statusLabels[status] || status}".`,
+        type: status === 'RESOLVED' ? 'INFO' : 'WARNING',
+        userId: existingReport.reporterId,
       },
+    });
+
+    await sendPushToUsers([existingReport.reporterId], {
+      title: `UPDATE LAPORAN: ${existingReport.title}`,
+      body: `Status laporan Anda telah diperbarui menjadi: "${statusLabels[status] || status}".`,
+      url: `/reports`,
+      notificationId: existingReport.id,
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Laporan berhasil terkirim dan akan ditinjau oleh pihak sekolah.',
-      report,
+      message: 'Status laporan berhasil diperbarui.',
+      report: updated,
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, message: 'Gagal membuat laporan.' }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Gagal memperbarui laporan.' }, { status: 500 });
   }
 }

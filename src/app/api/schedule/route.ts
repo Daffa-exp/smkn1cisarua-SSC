@@ -2,25 +2,6 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 
-// GET schedules (filtered by day or all)
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const day = searchParams.get('day');
-
-  try {
-    const whereCondition = day ? { day } : {};
-    const schedules = await db.schedule.findMany({
-      where: whereCondition,
-      orderBy: { startTime: 'asc' },
-    });
-
-    return NextResponse.json({ success: true, schedules });
-  } catch (error) {
-    return NextResponse.json({ success: false, schedules: [] }, { status: 500 });
-  }
-}
-
-// POST create new schedule (Admin & Teacher only)
 export async function POST(request: Request) {
   try {
     const session = await getSession();
@@ -29,60 +10,59 @@ export async function POST(request: Request) {
       !session ||
       (session.role !== 'ADMIN' && session.role !== 'SUPER_ADMIN' && session.role !== 'TEACHER')
     ) {
-      return NextResponse.json(
-        { success: false, message: 'Akses ditolak.' },
-        { status: 403 }
-      );
+      return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
     }
 
     const body = await request.json();
-    const { subject, teacher, className, room, day, startTime, endTime } = body;
+    const { rawText } = body;
 
-    if (!subject || !teacher || !className || !room || !day || !startTime || !endTime) {
+    if (!rawText) {
       return NextResponse.json(
-        { success: false, message: 'Semua bidang wajib diisi.' },
+        { success: false, message: 'Data CSV jadwal tidak boleh kosong.' },
         { status: 400 }
       );
     }
 
-    const schedule = await db.schedule.create({
-      data: {
-        subject,
-        teacher,
-        className,
-        room,
-        day,
-        startTime,
-        endTime,
-      },
-    });
+    const lines = rawText.split('\n').filter((l: string) => l.trim().length > 0);
+    const scheduleItems = [];
 
-    // Notify students about schedule update
-    const students = await db.user.findMany({
-      where: { role: 'STUDENT' },
-      select: { id: true },
-    });
+    for (const line of lines) {
+      // Header bypass
+      if (line.toLowerCase().includes('subject') || line.toLowerCase().includes('mata pelajaran')) {
+        continue;
+      }
 
-    if (students.length > 0) {
-      await db.notification.createMany({
-        data: students.map((s) => ({
-          title: `PERUBAHAN JADWAL: ${subject}`,
-          message: `Jadwal baru ${subject} (${day}, ${startTime} - ${endTime} WIB) di ${room} telah ditambahkan.`,
-          type: 'INFO',
-          userId: s.id,
-        })),
-      });
+      const parts = line.split(',').map((p: string) => p.trim());
+      if (parts.length >= 7) {
+        scheduleItems.push({
+          subject: parts[0],
+          teacher: parts[1],
+          className: parts[2],
+          room: parts[3],
+          day: parts[4],
+          startTime: parts[5],
+          endTime: parts[6],
+        });
+      }
     }
+
+    if (scheduleItems.length === 0) {
+      return NextResponse.json(
+        { success: false, message: 'Format CSV tidak valid. Gunakan 7 kolom: Subject, Guru, Kelas, Ruangan, Hari, Jam Mulai, Jam Selesai.' },
+        { status: 400 }
+      );
+    }
+
+    await db.schedule.createMany({
+      data: scheduleItems,
+    });
 
     return NextResponse.json({
       success: true,
-      message: 'Jadwal berhasil ditambahkan.',
-      schedule,
+      message: `Berhasil mengimpor ${scheduleItems.length} jadwal pelajaran.`,
+      count: scheduleItems.length,
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, message: 'Gagal menambahkan jadwal.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: 'Gagal mengimpor jadwal.' }, { status: 500 });
   }
 }

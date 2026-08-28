@@ -77,3 +77,47 @@ real environment, unrelated to any UI change).
 If you want, tell me which of the "next up" items to do now and I'll keep going in this same
 verify-as-I-go style — or if you can get this running in **Claude Code** locally, I can drive the rest
 with an actual browser open, which is where Phases 2, 4, 10-12, and 28 really belong.
+
+---
+
+# Real Web Push Notifications (VAPID)
+
+## What shipped
+- **Schema**: new `PushSubscription` model (userId relation, unique `endpoint`, `p256dh`, `auth`,
+  `userAgent`, timestamps, cascade delete). Nothing else in the schema touched.
+- **`src/lib/push.ts`**: server-side sender using `web-push` + VAPID. Batches sends (25 concurrent),
+  auto-deletes subscriptions that come back 404/410, never throws (a push failure can't break the
+  existing in-app notification flow it sits next to).
+- **`POST /api/push/subscribe`** / **`POST /api/push/unsubscribe`**: auth-gated, a user can only manage
+  their own subscription, upsert-by-endpoint so re-registering the same device is a no-op update.
+- **`public/sw.js`**: kept the existing `push`/`notificationclick` handlers (they were already there)
+  and hardened them — safer payload parsing, notification `tag` so a resend doesn't stack duplicates,
+  smarter focus-existing-tab-or-navigate logic on click.
+- **Wired into every existing place that already creates in-app `Notification` rows** — no new
+  broadcast surface invented: `/api/notifications` (the admin broadcast page), `/api/announcements`
+  (HIGH/URGENT only, same as before), `/api/events`, `/api/schedule`, `/api/emergency`,
+  `/api/reports/[id]`.
+- **Client**: `usePushNotifications` hook + `PushNotificationPrompt` banner ("Aktifkan Notifikasi" /
+  "Nanti"), mounted once in `AppShell`. Only shown to logged-in users, never re-prompts once
+  granted/denied, "Nanti" snoozes for 3 days. If permission was already granted on a previous visit, the
+  subscription is silently refreshed with no UI at all.
+- `web-push` + `@types/web-push` added to `package.json`.
+
+## Env vars needed (see also `.env.local` for local dev — generated fresh for this feature)
+```
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:admin@smkn1cisarua-ssc.sch.id
+```
+Add the same three to Vercel → Project Settings → Environment Variables (Production) before deploying.
+
+## Verified
+`next build` compiles clean end-to-end — all 46 routes, including the two new `/api/push/*` routes.
+The only error seen mid-build was the same pre-existing Prisma Windows-vs-Linux binary-target mismatch
+noted in the batch above (`prisma generate` on the real deploy target resolves it); unrelated to this
+feature.
+
+**Not yet done, needs a real Android Chrome device (this session has no browser):** the 5 manual tests
+from the brief (open/background/closed-PWA push delivery, click-to-navigate, and the 403 check for a
+student hitting the broadcast endpoint). See the FINAL REPORT in this session's reply for the honest
+status of each.
