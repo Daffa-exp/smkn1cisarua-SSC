@@ -81,39 +81,44 @@ export default function ForgotPasswordPage() {
               <div className="space-y-1">
                 <p>{status.text}</p>
                 {status.resetUrl && (
-                  <p className="text-[10px] text-slate-500 break-all">
-                    Link: {status.resetUrl}
-                  </p>
+                  <a
+                    href={status.resetUrl}
+                    className="inline-block mt-1 text-[10px] font-semibold text-brand-700 underline break-all"
+                  >
+                    Klik di sini untuk reset password
+                  </a>
                 )}
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-brand-600" />
-                Email Akun
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@smkn1cisarua.sch.id"
-                className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-              />
-            </div>
+          {!status?.success ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-brand-600" />
+                  Email Akun
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nama@smkn1cisarua.sch.id"
+                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                />
+              </div>
 
-            <Button
-              type="submit"
-              variant="primary"
-              isLoading={isLoading}
-              className="w-full py-2.5 text-sm font-semibold"
-            >
-              Kirim Link Reset Password
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isLoading}
+                className="w-full py-2.5 text-sm font-semibold"
+              >
+                Kirim Link Reset Password
+              </Button>
+            </form>
+          ) : null}
 
           <div className="text-center">
             <Link
