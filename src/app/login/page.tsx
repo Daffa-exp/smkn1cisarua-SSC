@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LogIn, Key, UserCheck, AlertCircle } from 'lucide-react';
 import { SchoolLogo } from '@/components/ui/SchoolLogo';
@@ -107,6 +108,14 @@ export default function LoginPage() {
             >
               <LogIn className="w-4 h-4" /> Masuk ke Akun
             </Button>
+            <div className="text-center">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-brand-600 hover:underline"
+              >
+                Lupa Password?
+              </Link>
+            </div>
           </form>
         </div>
       </div>

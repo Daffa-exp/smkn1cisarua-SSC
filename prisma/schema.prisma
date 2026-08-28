@@ -141,6 +141,18 @@ model PushSubscription {
   @@index([userId])
 }
 
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([tokenHash])
+}
+
 model ActivityLog {
   id        String   @id @default(cuid())
   action    String
