@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { hashPassword, verifyPassword } from '@/lib/auth';
+import { hashPassword } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
@@ -21,27 +21,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const records = await db.passwordReset.findMany({
-      where: { used: false },
+    const record = await db.passwordReset.findFirst({
+      where: { token, used: false },
     });
 
-    let matchedRecord = null;
-    for (const record of records) {
-      const isValid = await verifyPassword(token, record.tokenHash);
-      if (isValid) {
-        matchedRecord = record;
-        break;
-      }
-    }
-
-    if (!matchedRecord) {
+    if (!record) {
       return NextResponse.json(
         { success: false, message: 'Token tidak valid atau sudah digunakan.' },
         { status: 400 }
       );
     }
 
-    if (new Date(matchedRecord.expiresAt) < new Date()) {
+    if (new Date(record.expiresAt) < new Date()) {
       return NextResponse.json(
         { success: false, message: 'Token sudah expired.' },
         { status: 400 }
@@ -52,11 +43,11 @@ export async function POST(request: Request) {
 
     await db.$transaction([
       db.user.update({
-        where: { email: matchedRecord.email },
+        where: { email: record.email },
         data: { passwordHash: newHash },
       }),
       db.passwordReset.update({
-        where: { id: matchedRecord.id },
+        where: { id: record.id },
         data: { used: true },
       }),
     ]);

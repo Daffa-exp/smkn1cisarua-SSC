@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { hashPassword } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
@@ -26,13 +25,12 @@ export async function POST(request: Request) {
     }
 
     const resetToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-    const tokenHash = await hashPassword(resetToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await db.passwordReset.create({
       data: {
         email: user.email,
-        tokenHash,
+        token: resetToken,
         expiresAt,
       },
     });
